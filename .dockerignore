@@ -1,0 +1,14 @@
+.git
+.github
+examples
+*.md
+!README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+build-and-export.*
+**/__pycache__
+**/*.pyc
+*.tar
+*.tar.gz

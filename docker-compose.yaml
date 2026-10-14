@@ -1,0 +1,47 @@
+# edge-tts HTTP 服务 —— Docker Compose 部署文件
+# 用法： docker compose up -d        （或 docker-compose up -d）
+# 访问： http://<主机IP>:9550/health
+services:
+  edge-tts:
+    # 使用已导出的本地镜像（docker load -i edge-tts-web-ui.tar.gz 后可用）
+    image: edge-tts-web-ui:latest
+
+    container_name: edge-tts-web-ui
+    restart: unless-stopped
+
+    ports:
+      # 格式为 宿主机端口:容器端口；容器端口需与下面的 PORT 环境变量一致
+      - "9550:5050"
+
+    environment:
+      DEFAULT_VOICE: zh-CN-XiaoxiaoNeural   # 默认音色（中文女声，可选 zh-CN-YunxiNeural 男声）
+      MAX_TEXT_LEN: "1000"                  # 单条文本最大长度
+      PORT: "5050"                          # 容器内监听端口，改这里要同步改上面端口映射
+      LOG_LEVEL: info
+      TZ: Asia/Shanghai
+      # ---- 自动更新（取消下面 volumes 注释后生效）----
+      SRC_DIR: /src                         # 宿主机源码目录在容器内的挂载点
+      SELF_CONTAINER: edge-tts-web-ui              # 本容器名（自动重建时用）
+      IMAGE_TAG: edge-tts-web-ui            # 新镜像命名（重建时使用）
+      ENABLE_UPDATE: "1"
+      # ---- OpenAI 兼容接口鉴权（可选，取消注释后 /v1/* 需 Bearer Token）----
+      # OPENAI_API_KEY: sk-your-key-here
+
+    # ---- 启用“一键自动更新/手动下载”需取消以下两行注释 ----
+    # ⚠️ 挂载 docker.sock 等于把宿主机 Docker 控制权交给本容器，请勿暴露到公网
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./src:/src                 # 改成你实际的源码目录（git 仓库）
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:5050/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

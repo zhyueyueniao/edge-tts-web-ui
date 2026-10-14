@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>edge-tts 语音合成</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1f2329;
+    --text-2: #6b7280;
+    --border: #e5e7eb;
+    --star: #f59e0b;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 32px 16px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: var(--text-2); font-size: 13px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color .15s;
+  }
+  textarea:focus { outline: none; border-color: var(--primary); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  .field { margin-top: 20px; }
+  input[type=text], select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fff;
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--primary); }
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider-row input[type=range] { flex: 1; accent-color: var(--primary); }
+  .slider-val {
+    min-width: 56px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .actions { display: flex; gap: 12px; margin-top: 24px; }
+  button {
+    padding: 11px 22px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+  }
+  .btn-primary { background: var(--primary); color: #fff; flex: 1; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-ghost { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: #f3f4f6; }
+  .btn-ghost:disabled { opacity: .45; cursor: not-allowed; }
+  #status { margin-top: 16px; font-size: 13px; color: var(--text-2); min-height: 18px; }
+  #status.error { color: #dc2626; }
+  .result {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--border);
+    display: none;
+  }
+  .result.show { display: block; }
+  audio { width: 100%; margin-bottom: 12px; }
+  .fav-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .fav-chip {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    color: var(--text-2);
+  }
+  .fav-chip:hover { border-color: var(--primary); color: var(--primary); }
+  .fav-chip.active { background: #eff6ff; border-color: var(--primary); color: var(--primary); font-weight: 600; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .hint { font-size: 12px; color: var(--text-2); margin-top: 6px; }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -2px;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* ---------- 更新面板 ---------- */
+  .ver-badge {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .ver-badge.new { background: #ecfdf5; border-color: #10b981; color: #047857; font-weight: 600; }
+  .progress-track {
+    height: 8px;
+    background: #eef0f3;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+    border-radius: 999px;
+    transition: width .4s;
+  }
+  #updateLog {
+    margin-top: 10px;
+    max-height: 180px;
+    overflow: auto;
+    background: #0f172a;
+    color: #cbd5e1;
+    font-size: 11px;
+    line-height: 1.6;
+    padding: 10px 12px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .warn-box {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>🎙️ edge-tts 语音合成</h1>
+    <p class="subtitle">
+      Microsoft Edge 在线语音服务 · 无需 API Key<br>
+      <a href="/docs" target="_blank">📖 Swagger 接口文档</a> ·
+      <a href="/redoc" target="_blank">ReDoc 文档</a>
+      <span class="hint" style="display:inline">（需浏览器可访问外网 CDN）</span>
+    </p>
+
+    <div class="field">
+      <label for="text">文本内容</label>
+      <textarea id="text" placeholder="输入要转换成语音的文字…">你好，这是 edge-tts 语音合成服务。</textarea>
+      <div class="hint" id="charCount">0 / 1000 字</div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="voice">音色</label>
+        <div style="display:flex;gap:8px">
+          <select id="voice"><option value="zh-CN-XiaoxiaoNeural">加载中…</option></select>
+          <button class="btn-ghost" id="btnFav" title="收藏/取消收藏当前音色" style="padding:10px 14px">☆</button>
+        </div>
+        <div class="hint">点击 ☆ 收藏常用音色，收藏后可一键切换</div>
+        <div class="fav-bar" id="favBar"></div>
+      </div>
+      <div class="field">
+        <label for="voiceSearch">搜索音色</label>
+        <input type="text" id="voiceSearch" placeholder="按名称或语言筛选，如 zh-CN / 女">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>语速</label>
+        <div class="slider-row">
+          <input type="range" id="rate" min="-50" max="100" step="5" value="0">
+          <span class="slider-val" id="rateVal">+0%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>音调</label>
+        <div class="slider-row">
+          <input type="range" id="pitch" min="-50" max="50" step="5" value="0">
+          <span class="slider-val" id="pitchVal">+0Hz</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>音量</label>
+      <div class="slider-row">
+        <input type="range" id="volume" min="-50" max="50" step="5" value="0">
+        <span class="slider-val" id="volumeVal">+0%</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="btnGen">生成语音</button>
+      <button class="btn-ghost" id="btnDownload" disabled>下载 MP3</button>
+    </div>
+    <div id="status"></div>
+
+    <div class="result" id="result">
+      <audio id="player" controls></audio>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h1 style="font-size:18px">⚙️ 系统更新</h1>
+    <p class="subtitle">升级上游 rany2/edge-tts 到最新版本</p>
+
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="ver-badge" id="verCurrent">当前版本：加载中…</span>
+      <span class="ver-badge" id="verLatest">最新版本：未检查</span>
+      <button class="btn-ghost" id="btnCheck" style="padding:7px 16px">检查更新</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="btnAutoUpdate">一键自动更新（需服务器可联网）</button>
+    </div>
+
+    <div class="field">
+      <label>离线更新（推荐：服务器无法访问外网时用）</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a class="btn-ghost" id="lnkZip" href="https://github.com/rany2/edge-tts/releases/latest" target="_blank" style="padding:10px 16px">⬇️ 下载 Release 源码包 (zip)</a>
+        <a class="btn-ghost" id="lnkWheel" href="#" target="_blank" style="padding:10px 16px;display:none">直接下载最新 whl（PyPI）</a>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <input type="file" id="pkgFile" accept=".whl,.zip,.tar,.tar.gz,.tgz" style="flex:1;min-width:200px;font-size:13px">
+        <button class="btn-primary" id="btnUpload" style="white-space:nowrap">上传并更新</button>
+      </div>
+      <div class="hint">
+        ① 点上方链接在你的电脑上下载安装包：Release 页的 <b>Source code (zip)</b> 可直接用；whl 来自 PyPI（约 38KB），
+        检查更新后会出现直链
+        ② 选择下载的压缩包上传 ③ 服务端自动识别（源码包本地构建安装 / 镜像包 docker load）并重启——全程不需要服务器联网
+      </div>
+    </div>
+    <div id="updateMsg"></div>
+
+    <div id="updateProgress" style="display:none;margin-top:16px">
+      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="hint" id="updateStage" style="margin-top:8px"></div>
+      <pre id="updateLog"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var allVoices = [];
+  var favorites = JSON.parse(localStorage.getItem('edge-tts-favorites') || '[]');
+  var currentBlob = null;
+
+  // ---------- 滑块 ----------
+  function bindSlider(id, valId, suffix) {
+    var el = $(id), val = $(valId);
+    function update() {
+      var n = parseInt(el.value, 10);
+      val.textContent = (n >= 0 ? '+' : '') + n + suffix;
+    }
+    el.addEventListener('input', update);
+    update();
+  }
+  // edge-tts 要求参数必须带正负号，如 '+0%' / '-10%'
+  function signed(el) {
+    var n = parseInt(el.value, 10) || 0;
+    return (n >= 0 ? '+' : '') + n;
+  }
+  bindSlider('rate', 'rateVal', '%');
+  bindSlider('pitch', 'pitchVal', 'Hz');
+  bindSlider('volume', 'volumeVal', '%');
+
+  // ---------- 字数 ----------
+  function updateCount() {
+    var len = $('text').value.length;
+    $('charCount').textContent = len + ' / ' + parseInt(document.body.dataset.max || '1000') + ' 字';
+  }
+  $('text').addEventListener('input', updateCount);
+
+  // ---------- 音色 ----------
+  function renderFavBar() {
+    var bar = $('favBar');
+    bar.innerHTML = '';
+    favorites.forEach(function (name) {
+      var chip = document.createElement('button');
+      chip.className = 'fav-chip' + (name === $('voice').value ? ' active' : '');
+      chip.textContent = '★ ' + name.replace('zh-CN-', '').replace('Neural', '');
+      chip.onclick = function () { $('voice').value = name; renderFavBar(); };
+      bar.appendChild(chip);
+    });
+  }
+
+  function renderVoices() {
+    var keyword = $('voiceSearch').value.trim().toLowerCase();
+    var sel = $('voice');
+    var prev = sel.value;
+    sel.innerHTML = '';
+    var list = allVoices.filter(function (v) {
+      if (!keyword) return true;
+      return (v.Name + ' ' + v.Gender + ' ' + v.Locale + ' ' + v.FriendlyName).toLowerCase().indexOf(keyword) >= 0;
+    });
+    if (!list.length) {
+      sel.innerHTML = '<option value="">无匹配音色</option>';
+      return;
+    }
+    list.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v.Name;
+      opt.textContent = v.Name + '（' + (v.Gender === 'Female' ? '女' : '男') + '）';
+      sel.appendChild(opt);
+    });
+    if (prev && list.some(function (v) { return v.Name === prev; })) sel.value = prev;
+  }
+
+  fetch('/voices').then(function (r) { return r.json(); }).then(function (list) {
+    allVoices = list;
+    var zh = list.filter(function (v) { return v.Locale === 'zh-CN'; });
+    $('voice').innerHTML = '';
+    var order = zh.concat(list.filter(function (v) { return v.Locale !== 'zh-CN'; }));
+    order.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v.Name;
+      opt.textContent = v.Name + '（' + (v.Gender === 'Female' ? '女' : '男') + '）';
+      $('voice').appendChild(opt);
+    });
+    if (zh.length) $('voice').value = zh[0].Name;
+    renderVoices();
+    renderFavBar();
+  }).catch(function () {
+    $('voice').innerHTML = '<option value="zh-CN-XiaoxiaoNeural">zh-CN-XiaoxiaoNeural（列表加载失败）</option>';
+  });
+
+  $('voiceSearch').addEventListener('input', renderVoices);
+
+  // ---------- 收藏 ----------
+  function toggleFavorite() {
+    var name = $('voice').value;
+    if (!name) return;
+    var idx = favorites.indexOf(name);
+    if (idx >= 0) favorites.splice(idx, 1); else favorites.push(name);
+    localStorage.setItem('edge-tts-favorites', JSON.stringify(favorites));
+    renderFavBar();
+    $('btnFav').textContent = favorites.indexOf(name) >= 0 ? '★' : '☆';
+  }
+  $('btnFav').addEventListener('click', toggleFavorite);
+  $('voice').addEventListener('change', function () {
+    $('btnFav').textContent = favorites.indexOf($('voice').value) >= 0 ? '★' : '☆';
+    renderFavBar();
+  });
+
+  // ---------- 生成 ----------
+  $('btnGen').addEventListener('click', function () {
+    var text = $('text').value.trim();
+    if (!text) { setStatus('请输入文本', true); return; }
+    var btn = $('btnGen');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>合成中…';
+    setStatus('正在合成，请稍候…', false);
+    $('result').classList.remove('show');
+    $('btnDownload').disabled = true;
+
+    fetch('/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: text,
+        voice: $('voice').value,
+        rate: signed($('rate')) + '%',
+        pitch: signed($('pitch')) + 'Hz',
+        volume: signed($('volume')) + '%'
+      })
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error(j.detail || ('HTTP ' + r.status)); });
+      return r.blob();
+    }).then(function (blob) {
+      currentBlob = blob;
+      var url = URL.createObjectURL(blob);
+      $('player').src = url;
+      $('result').classList.add('show');
+      $('btnDownload').disabled = false;
+      setStatus('合成完成，时长约 ' + Math.round(blob.size / 1600 / 60 * 10) / 10 + ' 秒（按 128kbps 估算）', false);
+    }).catch(function (err) {
+      setStatus('合成失败：' + err.message, true);
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = '生成语音';
+    });
+  });
+
+  $('btnDownload').addEventListener('click', function () {
+    if (!currentBlob) return;
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(currentBlob);
+    a.download = 'edge-tts-' + Date.now() + '.mp3';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
+  function setStatus(msg, isError) {
+    var el = $('status');
+    el.textContent = msg;
+    el.className = isError ? 'error' : '';
+  }
+
+  updateCount();
+
+  // ==================== 系统更新 ====================
+  var pollTimer = null;
+  var STAGE_NAMES = {
+    check: '检查上游版本',
+    pull: '拉取上游最新代码',
+    build: '构建新镜像（约 1 分钟）',
+    install: '安装新版本包',
+    load: '加载镜像包',
+    deploy: '重建容器并重启',
+    restart: '重启容器'
+  };
+
+  function loadVersion() {
+    fetch('/api/version').then(function (r) { return r.json(); }).then(function (d) {
+      $('verCurrent').textContent = '当前版本：edge-tts v' + d.edge_tts;
+      if (d.latest_version) {
+        $('verLatest').textContent = '最新版本：v' + d.latest_version;
+        $('verLatest').className = 'ver-badge' + (d.latest_version !== d.edge_tts ? ' new' : '');
+      }
+      if (!d.auto_update_enabled) $('btnAutoUpdate').style.display = 'none';
+      if (!d.upload_update_enabled) {
+        $('pkgFile').disabled = true;
+        $('btnUpload').disabled = true;
+      }
+      if (!d.update_enabled) {
+        var hint = document.createElement('div');
+        hint.className = 'warn-box';
+        hint.innerHTML = '更新功能未启用：本容器未挂载 docker.sock（wslc 等无 Docker 环境即是如此）。' +
+          '如需启用，请在 docker-compose.yaml 中取消 volumes 注释并重启容器；' +
+          '否则请按 README 第九节在宿主机手动升级。';
+        $('updateMsg').appendChild(hint);
+      }
+    }).catch(function () {
+      $('verCurrent').textContent = '当前版本：获取失败';
+    });
+  }
+
+  $('btnCheck').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '检查中…';
+    fetch('/api/update/check', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        $('verLatest').textContent = d.latest ? ('最新版本：v' + d.latest + '（' + d.source + '）') : '最新版本：查询失败';
+        $('verLatest').className = 'ver-badge' + (d.has_update ? ' new' : '');
+        if (d.source_zip_url) {
+          $('lnkZip').href = d.source_zip_url;
+          $('lnkZip').textContent = '⬇️ 下载 v' + d.latest + ' 源码包 (zip)';
+        }
+        if (d.wheel_url) {
+          $('lnkWheel').href = d.wheel_url;
+          $('lnkWheel').style.display = 'inline-block';
+          $('lnkWheel').textContent = '直接下载 v' + d.latest + ' whl（PyPI）';
+        }
+        $('updateMsg').textContent = d.has_update
+          ? '发现新版本 v' + d.latest + '：下载上方任一安装包后从下面上传，或直接一键自动更新'
+          : (d.latest ? '当前已是最新版本' : '查询失败，请检查网络');
+      })
+      .catch(function (e) { $('updateMsg').textContent = '检查失败：' + e.message; })
+      .finally(function () { btn.disabled = false; btn.textContent = '检查更新'; });
+  });
+
+  function startAutoUpdate() {
+    $('btnAutoUpdate').disabled = true;
+    $('btnUpload').disabled = true;
+    $('updateProgress').style.display = 'block';
+    $('progressBar').style.width = '0%';
+    $('updateLog').textContent = '';
+    $('updateMsg').textContent = '';
+    fetch('/api/update/run', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { $('updateMsg').textContent = res.body.detail || '启动失败'; resetButtons(); return; }
+        pollTimer = setInterval(pollStatus, 1500);
+        pollStatus();
+      })
+      .catch(function (e) { $('updateMsg').textContent = '启动失败：' + e.message; resetButtons(); });
+  }
+
+  $('btnAutoUpdate').addEventListener('click', startAutoUpdate);
+
+  // ---------- 离线上传更新 ----------
+  $('btnUpload').addEventListener('click', function () {
+    var fileInput = $('pkgFile');
+    if (!fileInput.files || !fileInput.files.length) {
+      $('updateMsg').textContent = '请先选择安装包（.tar / .tar.gz）';
+      $('updateMsg').className = 'hint';
+      return;
+    }
+    var file = fileInput.files[0];
+    $('btnUpload').disabled = true;
+    $('btnAutoUpdate').disabled = true;
+    $('updateProgress').style.display = 'block';
+    $('progressBar').style.width = '0%';
+    $('updateLog').textContent = '正在上传 ' + file.name + '（' + Math.round(file.size / 1048576) + ' MB）…';
+    $('updateStage').textContent = '上传中 …';
+    $('updateMsg').textContent = '';
+
+    var fd = new FormData();
+    fd.append('file', file);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/update/upload');
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) {
+        $('progressBar').style.width = Math.round(e.loaded / e.total * 40) + '%';  // 上传占总进度 40%
+        $('updateStage').textContent = '上传中 ' + Math.round(e.loaded / e.total * 100) + '%';
+      }
+    };
+    xhr.onload = function () {
+      var res = {};
+      try { res = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300) {
+        $('updateStage').textContent = '上传完成（' + res.size_mb + ' MB），正在加载镜像并重建容器…';
+        pollTimer = setInterval(pollStatus, 1500);
+        pollStatus();
+      } else {
+        $('updateMsg').textContent = res.detail || ('上传失败（HTTP ' + xhr.status + '）');
+        $('updateProgress').style.display = 'none';
+        resetButtons();
+      }
+    };
+    xhr.onerror = function () {
+      $('updateMsg').textContent = '上传失败：网络错误';
+      $('updateProgress').style.display = 'none';
+      resetButtons();
+    };
+    xhr.send(fd);
+  });
+
+  function resetButtons() {
+    $('btnAutoUpdate').disabled = false;
+    $('btnUpload').disabled = false;
+  }
+
+  function pollStatus() {
+    fetch('/api/update/status').then(function (r) { return r.json(); }).then(function (d) {
+      $('progressBar').style.width = (d.percent || 0) + '%';
+      $('updateStage').textContent = (STAGE_NAMES[d.stage] || d.stage || '') +
+        (d.state === 'running' ? ' …' : '');
+      $('updateLog').textContent = (d.log || []).join('\n');
+      $('updateLog').scrollTop = $('updateLog').scrollHeight;
+
+      if (d.state === 'error') {
+        clearInterval(pollTimer);
+        $('updateMsg').textContent = '更新失败：' + (d.error || '未知错误');
+        resetButtons();
+      } else if (d.state === 'done') {
+        clearInterval(pollTimer);
+        if (d.stage === 'deploy') {
+          $('updateStage').textContent = '更新完成，服务正在重启…';
+          $('updateMsg').textContent = '更新完成，页面将在服务恢复后自动刷新';
+          waitHealthy();
+        } else {
+          $('updateMsg').textContent = '已是最新版本，无需更新';
+          resetButtons();
+        }
+      }
+    }).catch(function () { /* 重启期间连接失败，继续轮询 */ });
+  }
+
+  function waitHealthy() {
+    var tries = 0;
+    var t = setInterval(function () {
+      tries++;
+      fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+        clearInterval(t);
+        $('updateMsg').textContent = '服务已恢复（edge-tts v' + d.edge_tts + '），正在刷新…';
+        setTimeout(function () { location.reload(); }, 1200);
+      }).catch(function () {
+        if (tries > 40) { clearInterval(t); $('updateMsg').textContent = '服务恢复超时，请手动刷新页面'; }
+      });
+    }, 1500);
+  }
+
+  loadVersion();
+})();
+</script>
+</body>
+</html>
