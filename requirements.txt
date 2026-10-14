@@ -3,4 +3,4 @@ fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.30.0,<1.0.0
 python-multipart>=0.0.9        # 离线上传更新（文件上传表单解析）
 setuptools>=69                 # 离线更新：源码包本地构建 wheel 用（--no-build-isolation）
-wheel>=0.42
+wheel>=0.48.0
